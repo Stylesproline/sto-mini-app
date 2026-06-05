@@ -5,7 +5,9 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+// Глобальные переменные для защиты от потери контекста при переключениях экранов
 let globalTelegramId = 0;
+let globalTelegramUsername = "нет";
 let globalFirstName = "";
 
 export default function App() {
@@ -26,6 +28,7 @@ export default function App() {
   const [tgFirstName, setTgFirstName] = useState('');
 
   useEffect(() => {
+    // 1. Ловим данные Telegram строго в первую секунду загрузки приложения
     try {
       const tg = window.Telegram?.WebApp || window.TgApp;
       if (tg) {
@@ -35,7 +38,9 @@ export default function App() {
         const currentUser = tg.initDataUnsafe?.user;
         if (currentUser) {
           globalTelegramId = parseInt(currentUser.id, 10);
+          globalTelegramUsername = currentUser.username || "нет";
           globalFirstName = currentUser.first_name;
+          
           setTgFirstName(globalFirstName);
           
           const lastNameStr = currentUser.last_name ? ' ' + currentUser.last_name : '';
@@ -46,6 +51,7 @@ export default function App() {
       console.log("Ожидание контекста Telegram...");
     }
 
+    // 2. Загрузка филиалов СТО из базы Supabase
     async function fetchShops() {
       try {
         const { data, error } = await supabase
@@ -54,13 +60,14 @@ export default function App() {
         if (error) throw error;
         setShops(data || []);
       } catch (err) {
-        console.error(err.message);
+        console.error("Ошибка загрузки СТО:", err.message);
       } finally {
         setLoading(false);
       }
     }
     fetchShops();
 
+    // 3. Генерация календаря на 7 дней
     const dates = [];
     for (let i = 0; i < 7; i++) {
       const d = new Date();
@@ -80,13 +87,26 @@ export default function App() {
     setIsSubmitting(true);
     const dateTimeStr = `${selectedDate} ${selectedTime}`;
 
+    // Дополнительная фоновая проверка юзернейма перед отправкой
     try {
+      const nativeTg = window.Telegram?.WebApp || window.TgApp;
+      if (nativeTg?.initDataUnsafe?.user) {
+        globalTelegramId = parseInt(nativeTg.initDataUnsafe.user.id, 10);
+        globalTelegramUsername = nativeTg.initDataUnsafe.user.username || "нет";
+      }
+    } catch (err) {
+      console.log("Ошибка чтения нативного Telegram API:", err);
+    }
+
+    try {
+      // Отправляем запись в облако Supabase вместе с логином и ID
       const { error } = await supabase
         .from('appointments')
         .insert([
           {
             shop_id: selectedShop.id,
             user_id: globalTelegramId,
+            tg_username: globalTelegramUsername,
             date_time: dateTimeStr,
             name: name,
             phone: phone,

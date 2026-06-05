@@ -79,33 +79,6 @@ export default function App() {
   }, []);
 
 
-    async function fetchShops() {
-      try {
-        const { data, error } = await supabase
-          .from('shops')
-          .select('id, name, city, specialization');
-        if (error) throw error;
-        setShops(data || []);
-      } catch (err) {
-        console.error(err.message);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchShops();
-
-    const dates = [];
-    for (let i = 0; i < 7; i++) {
-      const d = new Date();
-      d.setDate(d.getDate() + i);
-      const day = String(d.getDate()).padStart(2, '0');
-      const month = String(d.getMonth() + 1).padStart(2, '0');
-      const year = d.getFullYear();
-      dates.push(`${day}.${month}.${year}`);
-    }
-    setAvailableDates(dates);
-  }, []);
-
   const handleBooking = async (e) => {
     e.preventDefault();
     if (!selectedShop || !selectedDate || !selectedTime || !name || !phone) return;

@@ -1,8 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
+
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+// Глобальные переменные вне контекста React (защита от стирания данных)
+let globalTelegramId = 0;
+let globalFirstName = "";
 
 export default function App() {
   const [shops, setShops] = useState([]);
@@ -19,32 +24,33 @@ export default function App() {
   const [availableDates, setAvailableDates] = useState([]);
 
   const timeSlots = ["09:00", "10:30", "12:00", "14:30", "16:00", "17:30", "19:00"];
-  const [tgUserId, setTgUserId] = useState(0);
   const [tgFirstName, setTgFirstName] = useState('');
 
   useEffect(() => {
-    // Безопасное извлечение данных напрямую через нативный интерфейс Telegram
+    // 1. Ловим данные Telegram строго в первую секунду загрузки приложения
     try {
       const tg = window.Telegram?.WebApp;
       if (tg) {
         tg.ready();
-        tg.expand(); // Разворачиваем на весь экран
+        tg.expand(); // Расширяем на весь экран смартфона
 
         const currentUser = tg.initDataUnsafe?.user;
         if (currentUser) {
-          setTgUserId(currentUser.id);
-          setTgFirstName(currentUser.first_name);
+          // Сохраняем в глобальные переменные, которые не сотрутся
+          globalTelegramId = parseInt(currentUser.id, 10);
+          globalFirstName = currentUser.first_name;
+          
+          setTgFirstName(globalFirstName);
           
           const lastNameStr = currentUser.last_name ? ' ' + currentUser.last_name : '';
-          const fullTgName = currentUser.first_name + lastNameStr;
-          setName(fullTgName);
+          setName(currentUser.first_name + lastNameStr);
         }
       }
     } catch (e) {
-      console.log("Приложение запущено вне мессенджера Telegram:", e);
+      console.log("Ошибка инициализации нативного Telegram API:", e);
     }
 
-    // Загрузка филиалов из базы Supabase
+    // 2. Загрузка филиалов СТО из базы Supabase
     async function fetchShops() {
       try {
         const { data, error } = await supabase
@@ -53,14 +59,14 @@ export default function App() {
         if (error) throw error;
         setShops(data || []);
       } catch (err) {
-        console.error(err.message);
+        console.error("Ошибка загрузки СТО из базы:", err.message);
       } finally {
         setLoading(false);
       }
     }
     fetchShops();
 
-    // Генерация календаря на 7 дней
+    // 3. Генерация календаря на 7 дней
     const dates = [];
     for (let i = 0; i < 7; i++) {
       const d = new Date();
@@ -73,31 +79,37 @@ export default function App() {
     setAvailableDates(dates);
   }, []);
 
-   const handleBooking = async (e) => {
+  const handleBooking = async (e) => {
     e.preventDefault();
     if (!selectedShop || !selectedDate || !selectedTime || !name || !phone) return;
 
     setIsSubmitting(true);
     const dateTimeStr = `${selectedDate} ${selectedTime}`;
 
-    // Прямое, мгновенное извлечение ID из Telegram без задержек useState
-    let realTelegramId = 0;
+    // ДИАГНОСТИКА: Проверяем, что видит скрипт перед отправкой в базу данных
     try {
       const nativeTg = window.Telegram?.WebApp;
-      if (nativeTg?.initDataUnsafe?.user?.id) {
-        realTelegramId = nativeTg.initDataUnsafe.user.id;
+      if (!nativeTg) {
+        alert("Диагностика: window.Telegram не найден (запущено вне ТГ или скрипт в index.html не в head)!");
+      } else if (!nativeTg.initDataUnsafe?.user) {
+        alert("Диагностика: объект WebApp есть, но initDataUnsafe.user пустой (возможно, запуск из Reply-кнопки клавиатуры)!");
+      } else {
+        alert("Диагностика: Telegram ID успешно определен: " + nativeTg.initDataUnsafe.user.id);
+        // На всякий случай обновляем глобальную переменную перед самой отправкой
+        globalTelegramId = parseInt(nativeTg.initDataUnsafe.user.id, 10);
       }
-    } catch (err) {
-      console.log("Не удалось прочитать нативный ID:", err);
+    } catch (diagErr) {
+      alert("Ошибка диагностики: " + diagErr.message);
     }
 
     try {
+      // Отправляем запись в облако Supabase
       const { error } = await supabase
         .from('appointments')
         .insert([
           {
             shop_id: selectedShop.id,
-            user_id: realTelegramId, // Отправляем гарантированно вытащенный ID
+            user_id: globalTelegramId, // Железно передаем глобальное число
             date_time: dateTimeStr,
             name: name,
             phone: phone,
@@ -108,17 +120,19 @@ export default function App() {
       if (error) throw error;
       setIsSuccess(true);
 
-      // Передаем данные об успехе обратно в бот
-      if (window.Telegram?.WebApp) {
-        window.Telegram.WebApp.sendData(JSON.stringify({ status: "success" }));
-      }
+      // Микропауза, чтобы сетевой поток успел закрыться перед уничтожением процесса окна
+      setTimeout(() => {
+        if (window.Telegram?.WebApp) {
+          window.Telegram.WebApp.sendData(JSON.stringify({ status: "success" }));
+        }
+      }, 300);
+
     } catch (err) {
-      alert(err.message);
+      alert("Ошибка отправки в Supabase: " + err.message);
     } finally {
       setIsSubmitting(false);
     }
   };
-
 
   if (loading) {
     return <div className="p-10 text-center text-white bg-slate-950 min-h-screen">Загрузка...</div>;
@@ -127,8 +141,10 @@ export default function App() {
   if (isSuccess) {
     return (
       <div className="p-6 text-center text-white bg-slate-950 min-h-screen flex flex-col justify-center">
-        <h2 className="text-xl font-bold text-emerald-400">Вы успешно записаны!</h2>
-        <p className="text-slate-400 mt-2">{selectedDate} в {selectedTime}</p>
+        <div className="w-full max-w-sm mx-auto p-6 bg-slate-900 rounded-2xl border border-slate-800">
+          <h2 className="text-xl font-bold text-emerald-400">Вы успешно записаны!</h2>
+          <p className="text-slate-400 mt-2">{selectedDate} в {selectedTime}</p>
+        </div>
       </div>
     );
   }
@@ -137,15 +153,10 @@ export default function App() {
     <div className="min-h-screen bg-slate-950 p-4 text-white font-sans">
       <div className="max-w-md mx-auto space-y-6">
         
-<header className="text-center space-y-1">
-  {tgFirstName && (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 mb-3 text-left max-w-sm mx-auto">
-      <p className="text-sm text-emerald-400 font-bold">👤 Пользователь: {tgFirstName}</p>
-      <p className="text-xs text-slate-400 font-mono mt-0.5">🆔 Ваш Telegram ID: {tgUserId}</p>
-    </div>
-  )}
-  <h1 className="text-xl font-bold text-slate-100">Онлайн-запись СТО</h1>
-</header>
+        <header className="text-center">
+          {tgFirstName && <p className="text-xs text-emerald-400 mb-1">Привет, {tgFirstName}! 👋</p>}
+          <h1 className="text-xl font-bold text-slate-100">Онлайн-запись СТО</h1>
+        </header>
 
         <section className="space-y-2">
           <label className="text-xs text-slate-400 block">1. ВЫБЕРИТЕ СТО</label>

@@ -17,8 +17,8 @@ export default function App() {
   
   const [issubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
-
   const [availableDates, setAvailableDates] = useState([]);
+
   const timeSlots = ["09:00", "10:30", "12:00", "14:30", "16:00", "17:30", "19:00"];
 
   useEffect(() => {
@@ -30,7 +30,7 @@ export default function App() {
         if (error) throw error;
         setShops(data || []);
       } catch (err) {
-        console.error("Ошибка загрузки СТО:", err.message);
+        console.error(err.message);
       } finally {
         setLoading(false);
       }
@@ -56,10 +56,7 @@ export default function App() {
 
   const handleBooking = async (e) => {
     e.preventDefault();
-    if (!selectedShop || !selectedDate || !selectedTime || !name || !phone) {
-      alert("Пожалуйста, заполните все шаги записи!");
-      return;
-    }
+    if (!selectedShop || !selectedDate || !selectedTime || !name || !phone) return;
 
     setIsSubmitting(true);
     const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
@@ -84,115 +81,62 @@ export default function App() {
       setIsSuccess(true);
       
       if (window.Telegram?.WebApp) {
-        window.Telegram.WebApp.sendData(JSON.stringify({ 
-          status: "success", 
-          shop: selectedShop.name, 
-          datetime: dateTimeStr 
-        }));
+        window.Telegram.WebApp.sendData(JSON.stringify({ status: "success" }));
       }
     } catch (err) {
-      alert("Ошибка отправки данных: " + err.message);
+      alert(err.message);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const getGoogleLink = () => {
-    if (!selectedShop) return '#';
-    const [datePart, timePart] = `${selectedDate} ${selectedTime}`.split(' ');
-    const [day, month, year] = datePart.split('.');
-    const [hours, minutes] = timePart.split(':');
-    const dt = new Date(year, month - 1, day, hours, minutes);
-    
-    const formatToUTC = (date) => date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
-    const gStart = formatToUTC(dt);
-    const gEnd = formatToUTC(new Date(dt.getTime() + 60 * 60 * 1000));
-
-    const baseUrl = "https://google.com";
-    return `${baseUrl}&text=${encodeURIComponent(`Запись на СТО: ${selectedShop.name}`)}&dates=${gStart}/${gEnd}&location=${encodeURIComponent(selectedShop.city)}`;
-  };
-
   if (loading) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-slate-950 text-white">
-        <div className="text-center">
-          <div className="mb-4 h-10 w-10 animate-spin rounded-full border-4 border-emerald-500 border-t-transparent mx-auto"></div>
-          <p className="text-slate-400 font-medium">Загрузка автосервисов...</p>
-        </div>
-      </div>
-    );
+    return <div className="p-10 text-center text-white">Загрузка...</div>;
   }
 
   if (isSuccess) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-slate-950 p-6 text-white">
-        <div className="w-full max-w-md rounded-2xl bg-slate-900 p-6 text-center border border-slate-800 shadow-xl">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-400 text-3xl">✓</div>
-          <h2 className="text-2xl font-bold text-emerald-400 mb-2">Вы успешно записаны!</h2>
-          <p className="text-slate-400 mb-6">
-            Ждем вас в филиале <strong>{selectedShop.name}</strong> ({selectedShop.city}) <br /> 
-            <strong>{selectedDate}</strong> в <strong>{selectedTime}</strong>.
-          </p>
-          <a 
-            href={getGoogleLink()} 
-            target="_blank" 
-            rel="noopener noreferrer" 
-            className="block w-full rounded-xl bg-blue-600 hover:bg-blue-700 py-3 text-center font-bold text-white transition-all shadow-lg"
-          >
-            🗓️ Добавить в мой Google Календарь
-          </a>
-        </div>
+      <div className="p-6 text-center text-white bg-slate-950 min-h-screen">
+        <h2 className="text-xl font-bold text-emerald-400">Вы успешно записаны!</h2>
+        <p className="text-slate-400 mt-2">{selectedDate} в {selectedTime}</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 px-4 py-6 text-white font-sans antialiased">
-      <div className="mx-auto max-w-md space-y-6">
+    <div className="min-h-screen bg-slate-950 p-4 text-white font-sans">
+      <div className="max-w-md mx-auto space-y-6">
         
-        <header className="text-center space-y-1">
-          <h1 className="text-2xl font-extrabold tracking-tight bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">
-            Онлайн-запись СТО
-          </h1>
-          <p className="text-sm text-slate-400">Выберите филиал и удобное время</p>
+        <header className="text-center">
+          <h1 className="text-xl font-bold text-emerald-400">Онлайн-запись СТО</h1>
         </header>
 
-        <section className="space-y-3">
-          <label className="text-xs font-bold uppercase tracking-wider text-slate-400">1. Выберите СТО</label>
-          <div className="grid grid-cols-1 gap-2">
-            {shops.map(shop => (
-              <button 
-                key={shop.id} 
-                onClick={() => setSelectedShop(shop)} 
-                className={`flex flex-col rounded-xl border p-4 text-left transition-all ${
-                  selectedShop?.id === shop.id 
-                    ? 'border-emerald-500 bg-emerald-950/20' 
-                    : 'border-slate-800 bg-slate-900 hover:border-slate-700'
-                }`}
-              >
-                <span className="font-bold text-slate-100">{shop.name}</span>
-                <span className="text-xs text-slate-400 mt-1">{shop.city} • {shop.specialization}</span>
-              </button>
-            ))}
-          </div>
+        <section className="space-y-2">
+          <label className="text-xs text-slate-400 block">1. ВЫБЕРИТЕ СТО</label>
+          {shops.map(shop => (
+            <button 
+              key={shop.id} 
+              onClick={() => setSelectedShop(shop)} 
+              className={`w-full p-4 text-left rounded-xl border ${selectedShop?.id === shop.id ? 'border-emerald-500 bg-emerald-950/20' : 'border-slate-800 bg-slate-900'}`}
+            >
+              <div className="font-bold">{shop.name}</div>
+              <div className="text-xs text-slate-400">{shop.city}</div>
+            </button>
+          ))}
         </section>
 
         {selectedShop && (
           <>
-            <section className="space-y-3">
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-400">2. Выберите дату визита</label>
-              <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
+            <section className="space-y-2">
+              <label className="text-xs text-slate-400 block">2. ВЫБЕРИТЕ ДАТУ</label>
+              <div className="flex gap-2 overflow-x-auto pb-2">
                 {availableDates.map(date => {
                   const parts = date.split('.');
                   return (
                     <button 
                       key={date} 
                       onClick={() => { setSelectedDate(date); setSelectedTime(''); }} 
-                      className={`flex-shrink-0 rounded-xl px-4 py-3 text-center text-sm font-semibold transition-all border ${
-                        selectedDate === date 
-                          ? 'border-emerald-500 bg-emerald-500 text-slate-950' 
-                          : 'border-slate-800 bg-slate-900 text-slate-300'
-                      }`}
+                      className={`px-4 py-2 rounded-xl border ${selectedDate === date ? 'bg-emerald-500 text-slate-950' : 'bg-slate-900 border-slate-800'}`}
                     >
                       {parts[0]}.{parts[1]}
                     </button>
@@ -202,18 +146,14 @@ export default function App() {
             </section>
 
             {selectedDate && (
-              <section className="space-y-3">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-400">3. Доступное время</label>
+              <section className="space-y-2">
+                <label className="text-xs text-slate-400 block">3. ВЫБЕРИТЕ ВРЕМЯ</label>
                 <div className="grid grid-cols-4 gap-2">
                   {timeSlots.map(time => (
                     <button 
                       key={time} 
                       onClick={() => setSelectedTime(time)} 
-                      className={`rounded-xl py-2.5 text-center text-xs font-bold transition-all border ${
-                        selectedTime === time 
-                          ? 'border-emerald-500 bg-emerald-500 text-slate-950' 
-                          : 'border-slate-800 bg-slate-900 text-slate-300 hover:border-slate-700'
-                      }`}
+                      className={`p-2 text-xs rounded-xl border ${selectedTime === time ? 'bg-emerald-500 text-slate-950' : 'bg-slate-900 border-slate-800'}`}
                     >
                       {time}
                     </button>
@@ -223,10 +163,8 @@ export default function App() {
             )}
 
             {selectedTime && (
-              <form onSubmit={handleBooking} className="space-y-4 rounded-2xl border border-slate-800 bg-slate-900 p-4 shadow-md">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-400 block mb-1">
-                  4. Контактные данные
-                </label>
+              <form onSubmit={handleBooking} className="space-y-3 p-4 bg-slate-900 rounded-xl border border-slate-800">
+                <label className="text-xs text-slate-400 block">4. ДАННЫЕ ДЛЯ ЗАПИСИ</label>
                 
                 <input 
                   type="text" 
@@ -234,16 +172,31 @@ export default function App() {
                   value={name} 
                   onChange={(e) => setName(e.target.value)} 
                   required 
-                  className="w-full rounded-xl bg-slate-950 border border-slate-800 p-3 text-sm text-white placeholder-slate-500 outline-none focus:border-emerald-500 transition-colors" 
+                  className="w-full rounded-xl bg-slate-950 border border-slate-800 p-3 text-sm text-white" 
                 />
                 
                 <input 
                   type="tel" 
-                  placeholder="+7 (999) 123-45-67" 
+                  placeholder="Номер телефона" 
                   value={phone} 
                   onChange={(e) => setPhone(e.target.value)} 
                   required 
-                  className="w-full rounded-xl bg-slate-950 border border-slate-800 p-3 text-sm text-white placeholder-slate-500 outline-none focus:border-emerald-500 transition-colors" 
+                  className="w-full rounded-xl bg-slate-950 border border-slate-800 p-3 text-sm text-white" 
                 />
                 
+                <button 
+                  type="submit" 
+                  disabled={issubmitting} 
+                  className="w-full rounded-xl bg-emerald-500 py-3 font-bold text-slate-950 text-sm"
+                >
+                  {issubmitting ? "Оформление..." : "Подтвердить запись"}
+                </button>
+              </form>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
 

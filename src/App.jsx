@@ -87,20 +87,22 @@ export default function App() {
     const dateTimeStr = `${selectedDate} ${selectedTime}`;
 
     // ДИАГНОСТИКА: Проверяем, что видит скрипт перед отправкой в базу данных
+      // ДИАГНОСТИКА: Принудительный поиск объекта Telegram в глобальном контексте
     try {
-      const nativeTg = window.Telegram?.WebApp;
-      if (!nativeTg) {
-        alert("Диагностика: window.Telegram не найден (запущено вне ТГ или скрипт в index.html не в head)!");
-      } else if (!nativeTg.initDataUnsafe?.user) {
-        alert("Диагностика: объект WebApp есть, но initDataUnsafe.user пустой (возможно, запуск из Reply-кнопки клавиатуры)!");
+      const globalTg = typeof window !== 'undefined' && window.Telegram?.WebApp;
+      
+      if (!globalTg) {
+        alert("Диагностика: window.Telegram всё еще не найден. Проверьте способ запуска бота!");
+      } else if (!globalTg.initDataUnsafe?.user) {
+        alert("Диагностика: Скрипт найден, но Telegram скрыл объект user. Поменяйте кнопку запуска!");
       } else {
-        alert("Диагностика: Telegram ID успешно определен: " + nativeTg.initDataUnsafe.user.id);
-        // На всякий случай обновляем глобальную переменную перед самой отправкой
-        globalTelegramId = parseInt(nativeTg.initDataUnsafe.user.id, 10);
+        alert("Диагностика: УСПЕХ! Нашли ID в момент клика: " + globalTg.initDataUnsafe.user.id);
+        globalTelegramId = parseInt(globalTg.initDataUnsafe.user.id, 10);
       }
     } catch (diagErr) {
       alert("Ошибка диагностики: " + diagErr.message);
     }
+
 
     try {
       // Отправляем запись в облако Supabase

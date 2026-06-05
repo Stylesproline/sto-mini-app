@@ -3,15 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    
-    <!-- СТРОГО СЮДА ВСТАВЛЯЕМ ЭТОТ СКРИПТ (ПЕРВЫМ В HEAD!) -->
-    <script src="https://telegram.org"></script>
-    
     <title>Онлайн-запись СТО</title>
   </head>
   <body class="bg-slate-950">
     <div id="root"></div>
+
+    <!-- ПЕРЕНОСИМ СЮДА: Скрипт Telegram должен стоять строго ПЕРЕД main.jsx -->
+    <script src="https://telegram.org"></script>
+    
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
+
 

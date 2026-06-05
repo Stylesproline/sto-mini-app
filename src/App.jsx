@@ -79,30 +79,30 @@ export default function App() {
     setAvailableDates(dates);
   }, []);
 
-  const handleBooking = async (e) => {
+   const handleBooking = async (e) => {
     e.preventDefault();
     if (!selectedShop || !selectedDate || !selectedTime || !name || !phone) return;
 
     setIsSubmitting(true);
     const dateTimeStr = `${selectedDate} ${selectedTime}`;
 
-    // ДИАГНОСТИКА: Проверяем, что видит скрипт перед отправкой в базу данных
-      // ДИАГНОСТИКА: Принудительный поиск объекта Telegram в глобальном контексте
+    // ОБХОД ИЗОЛЯЦИИ VITE ЧЕРЕЗ GLOBALTHIS
     try {
-      const globalTg = typeof window !== 'undefined' && window.Telegram?.WebApp;
-      
-      if (!globalTg) {
-        alert("Диагностика: window.Telegram всё еще не найден. Проверьте способ запуска бота!");
-      } else if (!globalTg.initDataUnsafe?.user) {
-        alert("Диагностика: Скрипт найден, но Telegram скрыл объект user. Поменяйте кнопку запуска!");
+      // globalThis — это гарантированный доступ к ядру браузера смартфона
+      const tgApp = typeof globalThis !== 'undefined' ? globalThis.Telegram?.WebApp : null;
+
+      if (!tgApp) {
+        alert("Диагностика: globalThis.Telegram не найден! Vite изолировал сборку. Сейчас исправим.");
+      } else if (!tgApp.initDataUnsafe?.user) {
+        alert("Диагностика: Контейнер найден, но Telegram скрыл объект user. Попробуйте перезапустить бота.");
       } else {
-        alert("Диагностика: УСПЕХ! Нашли ID в момент клика: " + globalTg.initDataUnsafe.user.id);
-        globalTelegramId = parseInt(globalTg.initDataUnsafe.user.id, 10);
+        const parsedId = parseInt(tgApp.initDataUnsafe.user.id, 10);
+        alert("УРА! TELEGRAM ID НАЙДЕН ЧЕРЕЗ GLOBALTHIS: " + parsedId);
+        globalTelegramId = parsedId;
       }
     } catch (diagErr) {
-      alert("Ошибка диагностики: " + diagErr.message);
+      alert("Сбой ядра детекции: " + diagErr.message);
     }
-
 
     try {
       // Отправляем запись в облако Supabase
@@ -111,7 +111,7 @@ export default function App() {
         .insert([
           {
             shop_id: selectedShop.id,
-            user_id: globalTelegramId, // Железно передаем глобальное число
+            user_id: globalTelegramId, // Передаем найденное число
             date_time: dateTimeStr,
             name: name,
             phone: phone,
@@ -122,10 +122,10 @@ export default function App() {
       if (error) throw error;
       setIsSuccess(true);
 
-      // Микропауза, чтобы сетевой поток успел закрыться перед уничтожением процесса окна
       setTimeout(() => {
-        if (window.Telegram?.WebApp) {
-          window.Telegram.WebApp.sendData(JSON.stringify({ status: "success" }));
+        const nativeTg = typeof globalThis !== 'undefined' ? globalThis.Telegram?.WebApp : null;
+        if (nativeTg && typeof nativeTg.sendData === 'function') {
+          nativeTg.sendData(JSON.stringify({ status: "success" }));
         }
       }, 300);
 
@@ -135,6 +135,7 @@ export default function App() {
       setIsSubmitting(false);
     }
   };
+
 
   if (loading) {
     return <div className="p-10 text-center text-white bg-slate-950 min-h-screen">Загрузка...</div>;

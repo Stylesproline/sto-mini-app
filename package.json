@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.107.0",
+    "@telegram-apps/sdk-react": "^3.3.9",
+    "@tonconnect/ui-react": "^2.4.4",
     "react": "^19.2.6",
     "react-dom": "^19.2.6"
   },

@@ -125,10 +125,15 @@ export default function App() {
     <div className="min-h-screen bg-slate-950 p-4 text-white font-sans">
       <div className="max-w-md mx-auto space-y-6">
         
-        <header className="text-center">
-          {tgFirstName && <p className="text-xs text-emerald-400 mb-1">Привет, {tgFirstName}! 👋</p>}
-          <h1 className="text-xl font-bold text-slate-100">Онлайн-запись СТО</h1>
-        </header>
+<header className="text-center space-y-1">
+  {tgFirstName && (
+    <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 mb-3 text-left max-w-sm mx-auto">
+      <p className="text-sm text-emerald-400 font-bold">👤 Пользователь: {tgFirstName}</p>
+      <p className="text-xs text-slate-400 font-mono mt-0.5">🆔 Ваш Telegram ID: {tgUserId}</p>
+    </div>
+  )}
+  <h1 className="text-xl font-bold text-slate-100">Онлайн-запись СТО</h1>
+</header>
 
         <section className="space-y-2">
           <label className="text-xs text-slate-400 block">1. ВЫБЕРИТЕ СТО</label>

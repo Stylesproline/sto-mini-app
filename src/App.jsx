@@ -25,20 +25,59 @@ export default function App() {
   const timeSlots = ["09:00", "10:30", "12:00", "14:30", "16:00", "17:30", "19:00"];
 
   useEffect(() => {
-    // Инициализация Telegram WebApp
-    if (window.Telegram?.WebApp) {
-      const webapp = window.Telegram.WebApp;
-      webapp.ready();
-      webapp.expand();
+    // Надежная инициализация Telegram WebApp
+    const tgContainer = window.Telegram?.WebApp;
+    
+    if (tgContainer) {
+      tgContainer.ready();
+      tgContainer.expand(); // Расширяем на весь экран смартфона
       
-      // Извлекаем данные пользователя
-      const user = webapp.initDataUnsafe?.user;
+      // Вытаскиваем безопасные данные
+      const user = tgContainer.initDataUnsafe?.user;
+      
       if (user) {
         setTgUser(user);
-        // Автоматически подставляем имя пользователя из Telegram
-        setName(user.first_name + (user.last_name ? ' ' + user.last_name : ''));
+        // Автоматически заполняем поле Имя
+        const fullName = user.first_name + (user.last_name ? ' ' + user.last_name : '');
+        setName(fullName);
+      } else {
+        // Если зашли из ТГ, но объект user почему-то пустой
+        console.log("Telegram WebApp запущен, но данные пользователя скрыты настройками приватности.");
+      }
+    } else {
+      // Лог для теста в обычном браузере вне Телеграма
+      console.log("Приложение запущено вне мессенджера Telegram.");
+    }
+
+    // Подтягиваем автосервисы из базы Supabase
+    async function fetchShops() {
+      try {
+        const { data, error } = await supabase
+          .from('shops')
+          .select('id, name, city, specialization');
+        if (error) throw error;
+        setShops(data || []);
+      } catch (err) {
+        console.error("Ошибка Supabase:", err.message);
+      } finally {
+        setLoading(false);
       }
     }
+    fetchShops();
+
+    // Генерация дат
+    const dates = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date();
+      d.setDate(d.getDate() + i);
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const year = d.getFullYear();
+      dates.push(`${day}.${month}.${year}`);
+    }
+    setAvailableDates(dates);
+  }, []);
+
 
     async function fetchShops() {
       try {

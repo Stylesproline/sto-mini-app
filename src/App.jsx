@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
-// Используем правильный импорт initInitData из официального SDK
-import { initWebApp, miniApp, initInitData } from '@telegram-apps/sdk-react';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -26,31 +24,28 @@ export default function App() {
   const [tgFirstName, setTgFirstName] = useState('');
 
   useEffect(() => {
+    // Безопасное извлечение данных напрямую через нативный интерфейс Telegram
     try {
-      initWebApp();
-      
-      if (miniApp.isAvailable()) {
-        miniApp.ready();
-        miniApp.expand();
-      }
+      const tg = window.Telegram?.WebApp;
+      if (tg) {
+        tg.ready();
+        tg.expand(); // Разворачиваем на весь экран
 
-      // Извлекаем initData через корректный метод SDK
-      if (initInitData.isAvailable()) {
-        const initData = initInitData();
-        const currentUser = initData?.user; // Безопасно берем юзера
-        
+        const currentUser = tg.initDataUnsafe?.user;
         if (currentUser) {
           setTgUserId(currentUser.id);
-          setTgFirstName(currentUser.firstName);
+          setTgFirstName(currentUser.first_name);
           
-          const fullTgName = currentUser.firstName + (currentUser.lastName ? ' ' + currentUser.lastName : '');
+          const lastNameStr = currentUser.last_name ? ' ' + currentUser.last_name : '';
+          const fullTgName = currentUser.first_name + lastNameStr;
           setName(fullTgName);
         }
       }
     } catch (e) {
-      console.log("Запущено вне Telegram или ошибка SDK:", e);
+      console.log("Приложение запущено вне мессенджера Telegram:", e);
     }
 
+    // Загрузка филиалов из базы Supabase
     async function fetchShops() {
       try {
         const { data, error } = await supabase
@@ -66,6 +61,7 @@ export default function App() {
     }
     fetchShops();
 
+    // Генерация календаря на 7 дней
     const dates = [];
     for (let i = 0; i < 7; i++) {
       const d = new Date();
@@ -101,6 +97,11 @@ export default function App() {
 
       if (error) throw error;
       setIsSuccess(true);
+
+      // Передаем данные об успехе обратно в бот (если нужно)
+      if (window.Telegram?.WebApp) {
+        window.Telegram.WebApp.sendData(JSON.stringify({ status: "success" }));
+      }
     } catch (err) {
       alert(err.message);
     } finally {

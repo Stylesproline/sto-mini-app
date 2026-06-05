@@ -5,7 +5,10 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-// Глобальные переменные вне контекста React (защита от стирания данных)
+// Скрытые переменные безопасности для Telegram
+const botToken = import.meta.env.VITE_TELEGRAM_BOT_TOKEN;
+const adminChatId = import.meta.env.VITE_TELEGRAM_ADMIN_CHAT_ID;
+
 let globalTelegramId = 0;
 let globalFirstName = "";
 
@@ -27,19 +30,16 @@ export default function App() {
   const [tgFirstName, setTgFirstName] = useState('');
 
   useEffect(() => {
-    // 1. Ловим данные Telegram строго в первую секунду загрузки приложения
     try {
-      const tg = window.Telegram?.WebApp;
+      const tg = window.Telegram?.WebApp || window.TgApp;
       if (tg) {
         tg.ready();
-        tg.expand(); // Расширяем на весь экран смартфона
+        tg.expand();
 
         const currentUser = tg.initDataUnsafe?.user;
         if (currentUser) {
-          // Сохраняем в глобальные переменные, которые не сотрутся
           globalTelegramId = parseInt(currentUser.id, 10);
           globalFirstName = currentUser.first_name;
-          
           setTgFirstName(globalFirstName);
           
           const lastNameStr = currentUser.last_name ? ' ' + currentUser.last_name : '';
@@ -47,10 +47,9 @@ export default function App() {
         }
       }
     } catch (e) {
-      console.log("Ошибка инициализации нативного Telegram API:", e);
+      console.log("Ожидание контекста Telegram...");
     }
 
-    // 2. Загрузка филиалов СТО из базы Supabase
     async function fetchShops() {
       try {
         const { data, error } = await supabase
@@ -59,14 +58,13 @@ export default function App() {
         if (error) throw error;
         setShops(data || []);
       } catch (err) {
-        console.error("Ошибка загрузки СТО из базы:", err.message);
+        console.error(err.message);
       } finally {
         setLoading(false);
       }
     }
     fetchShops();
 
-    // 3. Генерация календаря на 7 дней
     const dates = [];
     for (let i = 0; i < 7; i++) {
       const d = new Date();
@@ -79,39 +77,21 @@ export default function App() {
     setAvailableDates(dates);
   }, []);
 
-   const handleBooking = async (e) => {
+  const handleBooking = async (e) => {
     e.preventDefault();
     if (!selectedShop || !selectedDate || !selectedTime || !name || !phone) return;
 
     setIsSubmitting(true);
     const dateTimeStr = `${selectedDate} ${selectedTime}`;
 
-    // ОБХОД ИЗОЛЯЦИИ VITE ЧЕРЕЗ GLOBALTHIS
     try {
-      // globalThis — это гарантированный доступ к ядру браузера смартфона
-      const tgApp = typeof globalThis !== 'undefined' ? globalThis.Telegram?.WebApp : null;
-
-      if (!tgApp) {
-        alert("Диагностика: globalThis.Telegram не найден! Vite изолировал сборку. Сейчас исправим.");
-      } else if (!tgApp.initDataUnsafe?.user) {
-        alert("Диагностика: Контейнер найден, но Telegram скрыл объект user. Попробуйте перезапустить бота.");
-      } else {
-        const parsedId = parseInt(tgApp.initDataUnsafe.user.id, 10);
-        alert("УРА! TELEGRAM ID НАЙДЕН ЧЕРЕЗ GLOBALTHIS: " + parsedId);
-        globalTelegramId = parsedId;
-      }
-    } catch (diagErr) {
-      alert("Сбой ядра детекции: " + diagErr.message);
-    }
-
-    try {
-      // Отправляем запись в облако Supabase
+      // 1. Сначала железно записываем клиента в Supabase
       const { error } = await supabase
         .from('appointments')
         .insert([
           {
             shop_id: selectedShop.id,
-            user_id: globalTelegramId, // Передаем найденное число
+            user_id: globalTelegramId,
             date_time: dateTimeStr,
             name: name,
             phone: phone,
@@ -120,22 +100,31 @@ export default function App() {
         ]);
 
       if (error) throw error;
+
+      // 2. 🔔 ОТПРАВЛЯЕМ УВЕДОМЛЕНИЕ АДМИНУ НАПРЯМУЮ ИЗ REACT (БЕЗОПАСНО)
+      if (botToken && adminChatId) {
+        const messageText = `🚨 **НОВАЯ ЗАПИСЬ НА СТО!**\n\n👤 **Клиент:** ${name}\n📞 **Телефон:** ${phone}\n📅 **Время:** ${dateTimeStr}\n🛠️ **СТО:** ${selectedShop.name} (${selectedShop.city})`;
+        
+        await fetch(`https://telegram.org{botToken}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: adminChatId,
+            text: messageText,
+            parse_mode: "Markdown"
+          })
+        });
+      }
+
+      // Переключаем экран приложения на "Успех"
       setIsSuccess(true);
 
-      setTimeout(() => {
-        const nativeTg = typeof globalThis !== 'undefined' ? globalThis.Telegram?.WebApp : null;
-        if (nativeTg && typeof nativeTg.sendData === 'function') {
-          nativeTg.sendData(JSON.stringify({ status: "success" }));
-        }
-      }, 300);
-
     } catch (err) {
-      alert("Ошибка отправки в Supabase: " + err.message);
+      alert("Ошибка записи: " + err.message);
     } finally {
       setIsSubmitting(false);
     }
   };
-
 
   if (loading) {
     return <div className="p-10 text-center text-white bg-slate-950 min-h-screen">Загрузка...</div>;
@@ -147,6 +136,7 @@ export default function App() {
         <div className="w-full max-w-sm mx-auto p-6 bg-slate-900 rounded-2xl border border-slate-800">
           <h2 className="text-xl font-bold text-emerald-400">Вы успешно записаны!</h2>
           <p className="text-slate-400 mt-2">{selectedDate} в {selectedTime}</p>
+          <p className="text-xs text-slate-500 mt-3">Приложение можно закрыть</p>
         </div>
       </div>
     );
@@ -155,7 +145,6 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-950 p-4 text-white font-sans">
       <div className="max-w-md mx-auto space-y-6">
-        
         <header className="text-center">
           {tgFirstName && <p className="text-xs text-emerald-400 mb-1">Привет, {tgFirstName}! 👋</p>}
           <h1 className="text-xl font-bold text-slate-100">Онлайн-запись СТО</h1>
@@ -164,11 +153,7 @@ export default function App() {
         <section className="space-y-2">
           <label className="text-xs text-slate-400 block">1. ВЫБЕРИТЕ СТО</label>
           {shops.map(shop => (
-            <button 
-              key={shop.id} 
-              onClick={() => setSelectedShop(shop)} 
-              className={`w-full p-4 text-left rounded-xl border ${selectedShop?.id === shop.id ? 'border-emerald-500 bg-emerald-950/20' : 'border-slate-800 bg-slate-900'}`}
-            >
+            <button key={shop.id} onClick={() => setSelectedShop(shop)} className={`w-full p-4 text-left rounded-xl border ${selectedShop?.id === shop.id ? 'border-emerald-500 bg-emerald-950/20' : 'border-slate-800 bg-slate-900'}`}>
               <div className="font-bold">{shop.name}</div>
               <div className="text-xs text-slate-400">{shop.city}</div>
             </button>
@@ -183,11 +168,7 @@ export default function App() {
                 {availableDates.map(date => {
                   const parts = date.split('.');
                   return (
-                    <button 
-                      key={date} 
-                      onClick={() => { setSelectedDate(date); setSelectedTime(''); }} 
-                      className={`px-4 py-2 rounded-xl border flex-shrink-0 ${selectedDate === date ? 'bg-emerald-500 text-slate-950 border-emerald-500' : 'bg-slate-900 border-slate-800'}`}
-                    >
+                    <button key={date} onClick={() => { setSelectedDate(date); setSelectedTime(''); }} className={`px-4 py-2 rounded-xl border flex-shrink-0 ${selectedDate === date ? 'bg-emerald-500 text-slate-950 border-emerald-500' : 'bg-slate-900 border-slate-800'}`}>
                       {parts[0]}.{parts[1]}
                     </button>
                   );
@@ -200,11 +181,7 @@ export default function App() {
                 <label className="text-xs text-slate-400 block">3. ВЫБЕРИТЕ ВРЕМЯ</label>
                 <div className="grid grid-cols-4 gap-2">
                   {timeSlots.map(time => (
-                    <button 
-                      key={time} 
-                      onClick={() => setSelectedTime(time)} 
-                      className={`p-2 text-xs rounded-xl border text-center ${selectedTime === time ? 'bg-emerald-500 text-slate-950 border-emerald-500' : 'bg-slate-900 border-slate-800'}`}
-                    >
+                    <button key={time} onClick={() => setSelectedTime(time)} className={`p-2 text-xs rounded-xl border text-center ${selectedTime === time ? 'bg-emerald-500 text-slate-950 border-emerald-500' : 'bg-slate-900 border-slate-800'}`}>
                       {time}
                     </button>
                   ))}
@@ -215,30 +192,9 @@ export default function App() {
             {selectedTime && (
               <form onSubmit={handleBooking} className="space-y-3 p-4 bg-slate-900 rounded-xl border border-slate-800">
                 <label className="text-xs text-slate-400 block">4. ДАННЫЕ ДЛЯ ЗАПИСИ</label>
-                
-                <input 
-                  type="text" 
-                  placeholder="Ваше имя" 
-                  value={name} 
-                  onChange={(e) => setName(e.target.value)} 
-                  required 
-                  className="w-full rounded-xl bg-slate-950 border border-slate-800 p-3 text-sm text-white outline-none focus:border-emerald-500" 
-                />
-                
-                <input 
-                  type="tel" 
-                  placeholder="Номер телефона" 
-                  value={phone} 
-                  onChange={(e) => setPhone(e.target.value)} 
-                  required 
-                  className="w-full rounded-xl bg-slate-950 border border-slate-800 p-3 text-sm text-white outline-none focus:border-emerald-500" 
-                />
-                
-                <button 
-                  type="submit" 
-                  disabled={issubmitting} 
-                  className="w-full rounded-xl bg-emerald-500 py-3 font-bold text-slate-950 text-sm"
-                >
+                <input type="text" placeholder="Ваше имя" value={name} onChange={(e) => setName(e.target.value)} required className="w-full rounded-xl bg-slate-950 border border-slate-800 p-3 text-sm text-white outline-none focus:border-emerald-500" />
+                <input type="tel" placeholder="Номер телефона" value={phone} onChange={(e) => setPhone(e.target.value)} required className="w-full rounded-xl bg-slate-950 border border-slate-800 p-3 text-sm text-white outline-none focus:border-emerald-500" />
+                <button type="submit" disabled={issubmitting} className="w-full rounded-xl bg-emerald-500 py-3 font-bold text-slate-950 text-sm">
                   {issubmitting ? "Оформление..." : "Подтвердить запись"}
                 </button>
               </form>

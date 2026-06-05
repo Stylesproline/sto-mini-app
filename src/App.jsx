@@ -5,10 +5,6 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-// Скрытые переменные безопасности для Telegram
-const botToken = import.meta.env.VITE_TELEGRAM_BOT_TOKEN;
-const adminChatId = import.meta.env.VITE_TELEGRAM_ADMIN_CHAT_ID;
-
 let globalTelegramId = 0;
 let globalFirstName = "";
 
@@ -85,8 +81,6 @@ export default function App() {
     const dateTimeStr = `${selectedDate} ${selectedTime}`;
 
     try {
-      // Отправляем запись в облако Supabase — и ВСЁ! 
-      // База сама увидит новую строку и запустит нашу Edge-функцию уведомлений
       const { error } = await supabase
         .from('appointments')
         .insert([
@@ -101,42 +95,10 @@ export default function App() {
         ]);
 
       if (error) throw error;
-
-      // Переключаем экран приложения на "Успех"
       setIsSuccess(true);
 
     } catch (err) {
       alert("Ошибка записи в базу: " + err.message);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-      if (error) throw error;
-
-      // 2. 🔔 ОТПРАВЛЯЕМ УВЕДОМЛЕНИЕ АДМИНУ НАПРЯМУЮ ИЗ REACT (БЕЗОПАСНО)
-      if (botToken && adminChatId) {
-        const messageText = `🚨 **НОВАЯ ЗАПИСЬ НА СТО!**\n\n👤 **Клиент:** ${name}\n📞 **Телефон:** ${phone}\n📅 **Время:** ${dateTimeStr}\n🛠️ **СТО:** ${selectedShop.name} (${selectedShop.city})`;
-        
-        await fetch(`https://telegram.org{botToken}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: adminChatId,
-            text: messageText,
-            parse_mode: "Markdown"
-          })
-        });
-      }
-
-      // Переключаем экран приложения на "Успех"
-      setIsSuccess(true);
-
-    } catch (err) {
-      if (error) {
-  alert("Техническая ошибка Supabase: " + error.message + " | Код: " + error.code);
-  throw error;
-}
     } finally {
       setIsSubmitting(false);
     }

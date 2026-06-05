@@ -85,7 +85,8 @@ export default function App() {
     const dateTimeStr = `${selectedDate} ${selectedTime}`;
 
     try {
-      // 1. Сначала железно записываем клиента в Supabase
+      // Отправляем запись в облако Supabase — и ВСЁ! 
+      // База сама увидит новую строку и запустит нашу Edge-функцию уведомлений
       const { error } = await supabase
         .from('appointments')
         .insert([
@@ -98,6 +99,18 @@ export default function App() {
             google_event_id: 'TMA_BOOKING'
           }
         ]);
+
+      if (error) throw error;
+
+      // Переключаем экран приложения на "Успех"
+      setIsSuccess(true);
+
+    } catch (err) {
+      alert("Ошибка записи в базу: " + err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
       if (error) throw error;
 

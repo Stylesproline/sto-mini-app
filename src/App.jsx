@@ -120,7 +120,10 @@ export default function App() {
       setIsSuccess(true);
 
     } catch (err) {
-      alert("Ошибка записи: " + err.message);
+      if (error) {
+  alert("Техническая ошибка Supabase: " + error.message + " | Код: " + error.code);
+  throw error;
+}
     } finally {
       setIsSubmitting(false);
     }

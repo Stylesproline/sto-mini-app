@@ -73,12 +73,23 @@ export default function App() {
     setAvailableDates(dates);
   }, []);
 
-  const handleBooking = async (e) => {
+   const handleBooking = async (e) => {
     e.preventDefault();
     if (!selectedShop || !selectedDate || !selectedTime || !name || !phone) return;
 
     setIsSubmitting(true);
     const dateTimeStr = `${selectedDate} ${selectedTime}`;
+
+    // Прямое, мгновенное извлечение ID из Telegram без задержек useState
+    let realTelegramId = 0;
+    try {
+      const nativeTg = window.Telegram?.WebApp;
+      if (nativeTg?.initDataUnsafe?.user?.id) {
+        realTelegramId = nativeTg.initDataUnsafe.user.id;
+      }
+    } catch (err) {
+      console.log("Не удалось прочитать нативный ID:", err);
+    }
 
     try {
       const { error } = await supabase
@@ -86,7 +97,7 @@ export default function App() {
         .insert([
           {
             shop_id: selectedShop.id,
-            user_id: tgUserId,
+            user_id: realTelegramId, // Отправляем гарантированно вытащенный ID
             date_time: dateTimeStr,
             name: name,
             phone: phone,
@@ -97,7 +108,7 @@ export default function App() {
       if (error) throw error;
       setIsSuccess(true);
 
-      // Передаем данные об успехе обратно в бот (если нужно)
+      // Передаем данные об успехе обратно в бот
       if (window.Telegram?.WebApp) {
         window.Telegram.WebApp.sendData(JSON.stringify({ status: "success" }));
       }
@@ -107,6 +118,7 @@ export default function App() {
       setIsSubmitting(false);
     }
   };
+
 
   if (loading) {
     return <div className="p-10 text-center text-white bg-slate-950 min-h-screen">Загрузка...</div>;

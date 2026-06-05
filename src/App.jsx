@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
-// Импортируем официальный SDK Telegram
-import { initWebApp, miniApp, user } from '@telegram-apps/sdk-react';
+// Используем правильный импорт initInitData из официального SDK
+import { initWebApp, miniApp, initInitData } from '@telegram-apps/sdk-react';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -26,32 +26,31 @@ export default function App() {
   const [tgFirstName, setTgFirstName] = useState('');
 
   useEffect(() => {
-    // 1. Инициализация SDK Telegram напрямую
     try {
-      initWebApp(); // Базовая инициализация окружения
+      initWebApp();
       
       if (miniApp.isAvailable()) {
         miniApp.ready();
-        miniApp.expand(); // Разворачиваем на весь экран
+        miniApp.expand();
       }
 
-      // Напрямую запрашиваем данные пользователя из SDK
-      if (user.isAvailable()) {
-        const currentUser = user.get();
+      // Извлекаем initData через корректный метод SDK
+      if (initInitData.isAvailable()) {
+        const initData = initInitData();
+        const currentUser = initData?.user; // Безопасно берем юзера
+        
         if (currentUser) {
           setTgUserId(currentUser.id);
           setTgFirstName(currentUser.firstName);
           
-          // Сразу формируем имя для формы записи
           const fullTgName = currentUser.firstName + (currentUser.lastName ? ' ' + currentUser.lastName : '');
           setName(fullTgName);
         }
       }
     } catch (e) {
-      console.log("Приложение запущено вне Telegram или ошибка SDK:", e);
+      console.log("Запущено вне Telegram или ошибка SDK:", e);
     }
 
-    // 2. Получение данных из базы Supabase
     async function fetchShops() {
       try {
         const { data, error } = await supabase
@@ -67,7 +66,6 @@ export default function App() {
     }
     fetchShops();
 
-    // 3. Генерация календаря на 7 дней
     const dates = [];
     for (let i = 0; i < 7; i++) {
       const d = new Date();
@@ -93,7 +91,7 @@ export default function App() {
         .insert([
           {
             shop_id: selectedShop.id,
-            user_id: tgUserId, // Передаем ID, полученный напрямую из SDK
+            user_id: tgUserId,
             date_time: dateTimeStr,
             name: name,
             phone: phone,
